@@ -31,9 +31,9 @@ void LoadPluginMain()
     FollowerCollection::collectAll();
     uint32_t num;
     num = FollowerCollection::getFollowersCountMale();
-    logs::info("Male Follower count = %d", num);
+    logs::info("Male Follower count = {}", num);
     num = FollowerCollection::getFollowersCountFemale();
-    logs::info("Female Follower count = %d", num);
+    logs::info("Female Follower count = {}", num);
 
     const auto papyrus = SKSE::GetPapyrusInterface();
     if (!papyrus->Register(Papyrus::Register)) {
@@ -44,6 +44,7 @@ void LoadPluginMain()
 
 SKSEPluginLoad(const SKSE::LoadInterface *skse) {
     InitializeLogging();
+    logs::info("Log Initialized. {} Load start.", SKSE::PluginDeclaration::GetSingleton()->GetName());
     SKSE::Init(skse);
 
     // This example prints "Hello, world!" to the Skyrim ~ console.

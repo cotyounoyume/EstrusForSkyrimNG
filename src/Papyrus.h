@@ -12,7 +12,7 @@ namespace Papyrus {
         //static inline RE::TESObjectREFR* GetSelectedReference(RE::RE::StaticFunctionTag*);
         static inline void Debug1(RE::StaticFunctionTag*) { logs::info("Action from papyrus"); }
 
-        static inline RE::Actor* getFollower(RE::StaticFunctionTag*, bool isFemale, uint32_t number) {
+        static inline RE::Actor* GetFollower(RE::StaticFunctionTag*, bool isFemale, uint32_t number) {
             if (isFemale) {
                 return (RE::Actor*)FollowerCollection::getFollowerObjectFemale(number);
             } else {
@@ -20,7 +20,7 @@ namespace Papyrus {
             }
         }
 
-        static inline RE::Actor* getRandomFollower(RE::StaticFunctionTag*, bool isFemale) {
+        static inline RE::Actor* GetRandomFollower(RE::StaticFunctionTag*, bool isFemale) {
             if (isFemale) {
                 return (RE::Actor*)FollowerCollection::getRandomFollowerObjectFemale();
             } else {
@@ -28,7 +28,7 @@ namespace Papyrus {
             }
         }
 
-        static inline uint32_t getFollowersCount(RE::StaticFunctionTag*, bool isFemale) {
+        static inline uint32_t GetFollowersCount(RE::StaticFunctionTag*, bool isFemale) {
             if (isFemale) {
                 return FollowerCollection::getFollowersCountFemale();
             } else {
@@ -65,18 +65,18 @@ namespace Papyrus {
         static inline RE::TESIdleForm* GetCurrentIdle(RE::StaticFunctionTag*, RE::Actor* thisActor) 
         {
             if (!thisActor) {
-                logs::info("RE::Actor %08X is null", thisActor->formID);
+                logs::info("RE::Actor {:08X} is null", thisActor->formID);
                 return NULL;
             }
             auto ai = thisActor->GetActorRuntimeData().currentProcess;
             auto currentProcessIdle = ai->high->currentProcessIdle;
         
             if (!currentProcessIdle) {
-                logs::info("RE::Actor %08X 's current is null", thisActor->formID);
+                logs::info("RE::Actor {:08X} 's current is null", thisActor->formID);
                 return NULL;
             }
         
-            logs::info("RE::Actor %08X 's currentIdle formID is %08X", thisActor->formID, currentProcessIdle->formID);
+            logs::info("RE::Actor {:08X} 's currentIdle formID is {:08X}", thisActor->formID, currentProcessIdle->formID);
             return currentProcessIdle;
         }
 
@@ -118,12 +118,8 @@ namespace Papyrus {
             return (hp) ? hp->morphs->GetModel() : NULL;
         }
 
-        //                 
-        // function SwitchTriFiles(RE::Actor akRE::Actor, String headPath, String eyesPath, String browsPath) global native 
-
         //void SwitchTriFiles(RE::StaticFunctionTag*, RE::Actor* thisActor, BSFixedString pathHead, BSFixedString pathEyes,BSFixedString pathBrows) 
-        static inline void SwitchTriFiles(RE::StaticFunctionTag*, RE::Actor* thisActor, uint32_t iType,
-                                          RE::BSFixedString triPath)
+        static inline void SetTriFilePath(RE::StaticFunctionTag*, RE::Actor* thisActor, uint32_t iType, RE::BSFixedString triPath)
         {
             auto hp = GetHeadPart(thisActor, iType);
             hp->morphs->SetModel(triPath.c_str());
@@ -136,7 +132,6 @@ namespace Papyrus {
             return (anim) ? anim->alternateTextures->name3D : NULL;
         }
 
-
         // function SetAnimObjectPath(AnimObject anim, String newPath) global native
         static inline void SetAnimObjectPath(RE::StaticFunctionTag*, RE::TESForm* thisForm, RE::BSFixedString newPath) 
         {
@@ -144,23 +139,17 @@ namespace Papyrus {
             anim->alternateTextures->name3D = newPath;
         }
 
-
-
-
-
-
-
-
         static inline bool Register(RE::BSScript::IVirtualMachine* a_vm) 
         {
             a_vm->RegisterFunction("Debug1", CLASS_NAME, Debug1);
-            a_vm->RegisterFunction("getRandomFollower", CLASS_NAME, getRandomFollower);
-            a_vm->RegisterFunction("getFollowersCount", CLASS_NAME, getFollowersCount);
+            a_vm->RegisterFunction("GetFollower", CLASS_NAME, GetFollower);
+            a_vm->RegisterFunction("GetRandomFollower", CLASS_NAME, GetRandomFollower);
+            a_vm->RegisterFunction("GetFollowersCount", CLASS_NAME, GetFollowersCount);
             a_vm->RegisterFunction("IsDangerousWater", CLASS_NAME, IsDangerousWater);
             a_vm->RegisterFunction("SetDangerousWater", CLASS_NAME, SetDangerousWater);
             a_vm->RegisterFunction("GetCurrentIdle", CLASS_NAME, GetCurrentIdle);
             a_vm->RegisterFunction("GetTriFilePath", CLASS_NAME, GetTriFilePath);
-            a_vm->RegisterFunction("SwitchTriFiles", CLASS_NAME, SwitchTriFiles);
+            a_vm->RegisterFunction("SetTriFilePath", CLASS_NAME, SetTriFilePath);
             a_vm->RegisterFunction("GetAnimObjectPath", CLASS_NAME, GetAnimObjectPath);
             a_vm->RegisterFunction("SetAnimObjectPath", CLASS_NAME, SetAnimObjectPath);
             logs::info("Registered funcs for class {}", CLASS_NAME);

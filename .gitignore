@@ -18,3 +18,5 @@ aaacopy.bat
 
 # Skyrim archive files
 *.bsa
+scripts/source/Papyrus Compiler
+scripts/source/Caprica*
