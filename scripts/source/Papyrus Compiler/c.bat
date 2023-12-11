@@ -1,1 +1,0 @@
-PapyrusCompiler.exe %1 -f=TESV_Papyrus_Flags.flg -i="C:\Steam\steamapps\common\Skyrim Special Edition\Data\Scripts\Source" -o=E:\Data\EstrusForSkyrimNG\scripts
