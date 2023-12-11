@@ -139,7 +139,7 @@ bool TESFileReader::_ends_with(std::string str, std::string end) {
 void TESFileReader::_openTESFile() {
     fopen_s(&_file, _filePath.c_str(), "rb");
     if (_file == NULL || _file == INVALID_HANDLE_VALUE) {
-        logs::info("can't open file %s", _filePath.c_str());
+        logs::info("can't open file {}", _filePath.c_str());
         fclose(_file);
         _isError = true;
         _errorType = "can't open file";
@@ -156,8 +156,7 @@ void TESFileReader::_openTESFile() {
             fclose(_file);
             _isError = true;
             _errorType = "skip for file size upper limit";
-            logs::info("TESFileReader::%s's file size(%d) exceeds the upper limit(%d)", _filePath.c_str(), fsize,
-                     _upperLimit);
+            logs::info("TESFileReader::{}'s file size({}) exceeds the upper limit({})", _filePath.c_str(), fsize, _upperLimit);
             return;
         }
         // logs::info("TESFileReader::%s: %d bytes", _filePath.c_str(), _eofPos);
