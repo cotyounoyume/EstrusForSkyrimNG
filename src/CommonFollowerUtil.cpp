@@ -460,7 +460,7 @@ FollowerCollection::FollowerCollection() {}
 FollowerCollection::~FollowerCollection() {}
 
 std::string FollowerCollection::_getIniFilePath() {
-    return Utility::GetCurrentExecutableDirectory() + "\\Data\\SKSE\\plugins\\zzEstrusUtil.ini";
+    return Utility::GetCurrentExecutableDirectory() + "\\Data\\SKSE\\plugins\\EstrusForSkyrimNG.ini";
 }
 
 std::vector<std::string> split(const std::string& str, char delim) {
