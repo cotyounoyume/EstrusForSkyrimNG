@@ -24,9 +24,6 @@ scriptName zzEstrusUtil
 ;;;			6:	pattern6 (reserve)
 ;;;
 
-Bool function IsDangerousWater(Form waterForm) global native
-function SetDangerousWater(Form waterForm, Bool isDangerous) global native
-
 function EstrusEffectStopAPI(Actor akTarget, bool debugOn = false) global
 	_EstrusEffectStopAPI(akTarget, debugOn)
 endfunction
@@ -118,52 +115,6 @@ EndFunction
 armor Function GetSpellDisablerForm(bool debugOn = false) global
 	return _GetSpellDisablerForm(debugOn)
 EndFunction
-
-
-String Function GetTriFilePath(Actor akActor, Int type) global
-	EstrusForSkyrimNG.GetTriFilePath(akActor, type)
-EndFunction
-
-Function SwitchTriFiles(Actor akActor, String headPath, String eyesPath, String browsPath) global
-	EstrusForSkyrimNG.SwitchTriFiles(akActor, headPath, eyesPath, browsPath)
-EndFunction
-
-ObjectReference Function GetFurnitureReference(Actor akActor) global
-	return EstrusForSkyrimNG.GetFurnitureReference(akActor)
-EndFunction
-
-Actor Function GetRandomFollower(Bool isFemale) global
-	return EstrusForSkyrimNG.GetRandomFollower(isFemale)
-EndFunction
-
-Int Function GetFollowersCount(Bool isFemale) global
-	return EstrusForSkyrimNG.GetFollowersCount(isFemale)
-EndFunction
-
-Actor Function GetFollower(Bool isFemale, Int Number) global
-	return EstrusForSkyrimNG.GetFollower(isFemale, Number)
-EndFunction
-
-Idle Function GetCurrentIdle(Actor akActor) global
-	return EstrusForSkyrimNG.GetCurrentIdle(akActor)
-EndFunction
-
-String Function GetAnimObjectPath(Form animObject) global
-	return EstrusForSkyrimNG.GetAnimObjectPath(animObject)
-EndFunction
-
-Function SetAnimObjectPath(Form animObject, String newPath) global
-	return EstrusForSkyrimNG.SetAnimObjectPath(animObject, newPath)
-EndFunction
-
-Function Debug1() global
-	EstrusForSkyrimNG.Debug1()
-EndFunction
-
-Function SwitchTriFiles(Actor akActor, String headPath, String eyesPath, String browsPath) global
-	EstrusForSkyrimNG.SwitchTriFiles(akActor, headPath, eyesPath, browsPath)
-EndFunction
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -500,18 +451,79 @@ armor Function _GetSpellDisablerForm(bool debugOn) global
 	return game.GetFormFromFile(0x01022FA0,"zzEstrus.esp") as armor
 EndFunction
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;; Redirect Functions;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;zzestrusquestcorescript function getEstrusQuestCore() global
-;	return game.GetFormFromFile(0x01004888,"zzEstrus.esp") as zzestrusquestcorescript
-;endFunction
+Bool Function IsDangerousWater(Form waterForm) global
+	return EstrusForSkyrimNG.IsDangerousWater(waterForm)
+EndFunction
 
-;;; These Functions are invalid (for restraining warning messages)
+Function SetDangerousWater(Form waterForm, Bool isDangerous) global
+	EstrusForSkyrimNG.SetDangerousWater(waterForm, isDangerous)
+EndFunction
 
-;;; function EstrusMFG() global native
-;;; function TogglePause() global native
-;;; function SetCurrentFOV(Float fov) global native
-;;; Float function GetCurrentFOV() global native
-;;; Float function GetDefaultFOV() global native
-;;; function SetGlobalTimeMultiplier(Float ratio) global native
-;;; TextureSet function GetDefaultSkinTextureSet(ArmorAddon thisArmorAddon, Bool bFemale) global native	
-;;; ObjectReference function test1(Actor akActor) global native
+Actor Function GetFollower(Bool isFemale, Int Number) global
+	return EstrusForSkyrimNG.GetFollower(isFemale, Number)
+EndFunction
+
+Actor Function GetRandomFollower(Bool isFemale) global
+	return EstrusForSkyrimNG.GetRandomFollower(isFemale)
+EndFunction
+
+int Function GetFollowersCount(Bool isFemale) global
+	return EstrusForSkyrimNG.GetFollowersCount(isFemale)
+EndFunction
+
+String Function GetTriFilePath(Actor akActor, Int type) global
+	return EstrusForSkyrimNG.GetTriFilePath(akActor, type)
+EndFunction
+
+Function SetTriFilePath(Actor akActor, Int type, String path) global
+	EstrusForSkyrimNG.SetTriFilePath(akActor, type, path)
+EndFunction
+
+Idle Function GetCurrentIdle(Actor akActor) global
+	return EstrusForSkyrimNG.GetCurrentIdle(akActor)
+EndFunction
+
+Function SetAnimObjectPath(Form animObject, String newPath) global
+	EstrusForSkyrimNG.SetAnimObjectPath(animObject, newPath)
+EndFunction
+
+String Function GetAnimObjectPath(Form animObject) global
+	return EstrusForSkyrimNG.GetAnimObjectPath(animObject)
+EndFunction
+
+Function Debug1() global
+	EstrusForSkyrimNG.Debug1()
+EndFunction
+
+ObjectReference Function GetFurnitureReference(Actor akActor) global
+	akActor.GetFurnitureReference()
+EndFunction
+
+Function SwitchTriFiles(Actor akActor, String headPath, String eyesPath, String browsPath) global
+	SetTriFilePath(akActor, 1, headPath)
+	SetTriFilePath(akActor, 2, eyesPath)
+	SetTriFilePath(akActor, 6, browsPath)
+EndFunction
+
+;;; not implemented
+Function SetUFOCamSpeedMult(Float ratio) global
+	EstrusForSkyrimNG.SetUFOCamSpeedMult(ratio)
+EndFunction
+
+Function StartFlyCam() global
+	EstrusForSkyrimNG.StartFlyCam()
+EndFunction
+
+Function StopFlyCam() global
+	EstrusForSkyrimNG.StopFlyCam()
+EndFunction
+
+Function ToggleFlyCam() global
+	EstrusForSkyrimNG.ToggleFlyCam()
+EndFunction
