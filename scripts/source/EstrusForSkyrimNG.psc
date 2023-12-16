@@ -16,7 +16,7 @@ String Function GetAnimObjectPath(Form animObject) global native
 
 Function Debug1() global native
 
-Function GetFurnitureReference(Actor akActor) global
+ObjectReference Function GetFurnitureReference(Actor akActor) global
 	akActor.GetFurnitureReference()
 EndFunction
 
@@ -26,7 +26,7 @@ Function SwitchTriFiles(Actor akActor, String headPath, String eyesPath, String 
 	SetTriFilePath(akActor, 6, browsPath)
 EndFunction
 
-;Function SetUFOCamSpeedMult(Float ratio) global native
-;Function StartFlyCam() global native
-;Function StopFlyCam() global native
-;Function ToggleFlyCam() global native
+Function SetUFOCamSpeedMult(Float ratio) global native
+Function StartFlyCam() global native
+Function StopFlyCam() global native
+Function ToggleFlyCam() global native
