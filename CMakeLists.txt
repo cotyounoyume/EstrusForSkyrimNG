@@ -8,7 +8,7 @@ cmake_minimum_required(VERSION 3.21)
 
 # [BEGIN set_project_name]
 # Set your project name. This will be the name of your SKSE .dll file.
-project(EstrusForSkyrimNG VERSION 0.0.1 LANGUAGES CXX)
+project(EstrusForSkyrimNG VERSION 2.3.1 LANGUAGES CXX)
 
 # [END set_project_name]
 
@@ -37,10 +37,18 @@ endif()
 # Otherwise, you can set OUTPUT_FOLDER to any place you'd like :)
 # set(OUTPUT_FOLDER "C:/path/to/any/folder")
 
+# CommonLibSSE-NG (alandtse fork) is built from the git submodule.
+# Skyrim 1.7.99+ needs Address Library format 5, which older CommonLib can't read.
+set(BUILD_TESTS OFF CACHE BOOL "Disable CommonLibSSE-NG tests" FORCE)
+add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/lib/commonlibsse-ng" commonlibsse-ng EXCLUDE_FROM_ALL)
+if(NOT COMMAND add_commonlibsse_plugin)
+    include("${CMAKE_CURRENT_SOURCE_DIR}/lib/commonlibsse-ng/cmake/CommonLibSSE.cmake")
+endif()
+
 # Setup your SKSE plugin as an SKSE plugin!
-find_package(CommonLibSSE CONFIG REQUIRED)
 add_commonlibsse_plugin(${PROJECT_NAME}
-    SOURCES 
+    AUTHOR "cotyounoyume"
+    SOURCES
     src/main.cpp
     src/PCH.h
     src/Utility.cpp
