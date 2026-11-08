@@ -70,7 +70,7 @@ typedef struct _pair {
 class TESFileReader : TESReader {
 public:
     TESFileReader();
-    TESFileReader(uint32_t);
+    explicit TESFileReader(const RE::TESFile*);
     ~TESFileReader();
 
     std::vector<pair> getRefs();
@@ -108,7 +108,7 @@ private:
     std::string _errorType;
     uint32_t _upperLimit;
 
-    void _setFilePath();
+    void _setFilePath(const RE::TESFile*);
     void _openTESFile();
     void _getTESHeader();
     void _skipTESHeader();
@@ -121,7 +121,7 @@ private:
     TESFieldTarget _fetchNextTESFieldTarget();
     bool _ends_with(std::string, std::string);
     void _pushItem(uint32_t, uint32_t);
-    uint32_t _modifyModIndexMask(uint32_t);
+    uint32_t _resolveFormID(uint32_t);
 };
 
 struct iniLine {
@@ -166,4 +166,5 @@ private:
     static iniConf _str2Conf(std::string);
     static bool _isDlc(std::string);
     static void _setconf(iniConf);
+    static void _scanMod(const RE::TESFile*);
 };
