@@ -15,47 +15,50 @@ std::string TESReader::readTESType(FILE* hFile, uint32_t pos) {
 }
 
 std::string TESReader::readTESString(FILE* hFile, uint32_t pos, uint32_t length) {
-    char cstr[256];
+    char cstr[256] = {};
+    if (length >= sizeof(cstr)) {
+        length = sizeof(cstr) - 1;
+    }
     fseek(hFile, pos, 0);
     fread(cstr, sizeof(char), length, hFile);
     return cstr;
 }
 
 uint32_t TESReader::readUInt32(FILE* hFile, uint32_t pos) {
-    uint32_t value;
+    uint32_t value = 0;
     fseek(hFile, pos, 0);
     fread(&value, sizeof(value), 1, hFile);
     return value;
 }
 
 uint32_t TESReader::readUInt16(FILE* hFile, uint32_t pos) {
-    uint16_t value;
+    uint16_t value = 0;
     fseek(hFile, pos, 0);
     fread(&value, sizeof(value), 1, hFile);
     return value;
 }
 
-TESFileReader::TESFileReader() {}
+TESFileReader::TESFileReader() : TESFileReader(nullptr) {}
 
-TESFileReader::TESFileReader(uint32_t modNum) {
-    _file = NULL;
-    _modIndex = modNum;
+TESFileReader::TESFileReader(const RE::TESFile* a_file) {
+    _file = nullptr;
+    _modIndex = 0;
     _pos = 0;
+    _eofPos = 0;
+    _cellEndPos = 0;
     _hasRefs = false;
     _hasCells = false;
     _isError = false;
     _hasBody = true;
     _errorType = "";
     _upperLimit = 0;
-    std::vector<pair> _pairs = std::vector<pair>();
-    std::vector<std::string> _masters = std::vector<std::string>();
     _masterNum = 0;
     _dhnd = RE::TESDataHandler::GetSingleton();
 
-    _setFilePath();
+    _setFilePath(a_file);
 }
 
-TESFileReader::~TESFileReader() {}
+TESFileReader::~TESFileReader() { _closeTESFile(); }
 
 std::string TESFileReader::readTESType() {
     if (_pos >= _eofPos) {
@@ -79,26 +82,28 @@ uint32_t TESFileReader::readUInt32() {
     if (_pos >= _eofPos) {
         _isError = true;
         _errorType = "File read pointer error. (Unexpected ESP file format?)";
-        return NULL;
+        return 0;
     }
     return TESReader::readUInt32(_file, _pos);
 }
 
 uint32_t TESFileReader::readUInt16() {
     if (_pos >= _eofPos) {
-        return NULL;
+        return 0;
     }
     return TESReader::readUInt16(_file, _pos);
 }
 
 
 
-void TESFileReader::_setFilePath() {
-    //_filePath = GetRuntimeDirectory() + "data\\" + _dhnd->modList.loadedMods[_modIndex]->name;
-    _filePath = Utility::GetCurrentExecutableDirectory() + "\\data\\" + _dhnd->LookupLoadedModByIndex(_modIndex)->fileName;
-
-    //_modName = _dhnd->modList.loadedMods[_modIndex]->name;
-    _modName = _dhnd->LookupLoadedModByIndex(_modIndex)->fileName;
+void TESFileReader::_setFilePath(const RE::TESFile* a_file) {
+    if (!a_file) {
+        _isError = true;
+        _errorType = "no mod file";
+        return;
+    }
+    _modName = a_file->GetFilename();
+    _filePath = Utility::GetCurrentExecutableDirectory() + "\\data\\" + _modName;
     std::string ends = ".esp";
     if (TESFileReader::_ends_with(_modName, ends)) {
         _modType = "esp";
@@ -118,6 +123,9 @@ bool TESFileReader::isEsp() {
 void TESFileReader::setUpperLimit(uint32_t upperLimit) { _upperLimit = upperLimit; }
 
 void TESFileReader::scanTESFileByModIndex() {
+    if (_isError) {
+        return;
+    }
     _openTESFile();
     _getTESHeader();
     if (_hasBody) {
@@ -137,10 +145,9 @@ bool TESFileReader::_ends_with(std::string str, std::string end) {
 }
 
 void TESFileReader::_openTESFile() {
-    fopen_s(&_file, _filePath.c_str(), "rb");
-    if (_file == NULL || _file == INVALID_HANDLE_VALUE) {
+    if (fopen_s(&_file, _filePath.c_str(), "rb") != 0 || !_file) {
         logs::info("can't open file {}", _filePath.c_str());
-        fclose(_file);
+        _file = nullptr;
         _isError = true;
         _errorType = "can't open file";
         return;
@@ -149,11 +156,17 @@ void TESFileReader::_openTESFile() {
 
         fseek(_file, 0, SEEK_END);
         fgetpos(_file, &fsize);
-        _eofPos = fsize;
+        if (fsize < 0 || fsize > 0xFFFFFFFFll) {
+            _closeTESFile();
+            _isError = true;
+            _errorType = "unsupported file size";
+            return;
+        }
+        _eofPos = static_cast<uint32_t>(fsize);
         if (_upperLimit == 0 || _upperLimit > fsize) {
             return;
         } else {
-            fclose(_file);
+            _closeTESFile();
             _isError = true;
             _errorType = "skip for file size upper limit";
             logs::info("TESFileReader::{}'s file size({}) exceeds the upper limit({})", _filePath.c_str(), fsize, _upperLimit);
@@ -163,7 +176,12 @@ void TESFileReader::_openTESFile() {
     }
 }
 
-void TESFileReader::_closeTESFile() { fclose(_file); }
+void TESFileReader::_closeTESFile() {
+    if (_file) {
+        fclose(_file);
+        _file = nullptr;
+    }
+}
 
 void TESFileReader::_getTESHeader() {
     if (_isError) {
@@ -255,9 +273,13 @@ void TESFileReader::_skipToCellGroup() {
     bool isSuccess = false;
     while (_pos < _eofPos && tg.label != "CELL") {
         tg = _fetchNextTESGroup();
+        if (tg.type != "GRUP" || tg.dataSize < GRUPSIZE) {
+            // Broken or unexpected data. Stop here so we don't loop forever.
+            break;
+        }
         if (tg.label == "CELL") {
             isSuccess = true;
-            _cellEndPos = _pos + tg.dataSize;
+            _cellEndPos = (std::min)(_pos + tg.dataSize, _eofPos);
         } else {
             _pos += tg.dataSize;
         }
@@ -353,6 +375,12 @@ void TESFileReader::_collectACHRFormIDs() {
                 TESRecord tr = _fetchNextTESRecord();
                 uint32_t nextPos = _pos + HEADERSIZE + tr.dataSize;
                 _hasRefs = true;
+                if (tr.flags & 0x00040000) {
+                    // Compressed record: the NAME field can't be read directly.
+                    _pos = nextPos;
+                    tg = _fetchNextTESGroup();
+                    continue;
+                }
 
                 _pos += HEADERSIZE;
                 TESFieldUnknown tf = _fetchNextTESFieldUnknown();
@@ -368,8 +396,8 @@ void TESFileReader::_collectACHRFormIDs() {
                         tf = _fetchNextTESFieldUnknown();
                     }
                 }
-                uint32_t objID = _modifyModIndexMask(tr.formID);
-                uint32_t baseID = _modifyModIndexMask(abformID);
+                uint32_t objID = _resolveFormID(tr.formID);
+                uint32_t baseID = _resolveFormID(abformID);
                 _pushItem(objID, baseID);
                 _pos = nextPos;
                 //			logs::info("TESFileReader::_collectACHRFormIDs:\t%08X(%08X)\t%08X(%08X)\t%s", objID, tr.formID,
@@ -403,36 +431,13 @@ public:
 };
 */
 
-uint32_t TESFileReader::_modifyModIndexMask(uint32_t formID) {
-    uint32_t mask = formID >> 24;
-    uint32_t newMask;
-    uint32_t modIndex;
-
-    //	logs::info("\t\toriginal formID=%08X, mask = %02X", formID, mask);
-
-    if (mask == _masterNum) {
-        //		logs::info("\t\tthis formID(%08X) has mask(%02X), this mask should be replaced to original modIndex %02X",
-        //formID, mask, _modIndex);
-        newMask = _modIndex << 24;
-    } else if (mask < _masterNum) {
-        //		modIndex = _dhnd->modList.modInfoList.GetIndexOf(LoadedModFinder(_masters[mask].c_str()));
-        //modIndex = _dhnd->LookupModByName(_masters[mask].c_str())->modIndex;
-        modIndex = _dhnd->GetLoadedModIndex(_masters[mask].c_str()).value();
-         //		logs::info("\t\tthis formID(%08X) has mask(%02X), masters[%d]=%s, this mask should be replaced to
-        //master's
-        //modIndex %02d", formID, mask, mask, _masters[mask].c_str(), modIndex);
-        newMask = modIndex << 24;
-    } else {
-        //		logs::info("\t\terror: this formID(%08X) has mask(%02X), but masterNum=%d", formID, mask, _masterNum);
-        return 0x0;
+// Convert a form ID as written in the plugin file (top byte = master index)
+// to the runtime form ID. The engine helper handles light (ESL) masters too.
+uint32_t TESFileReader::_resolveFormID(uint32_t formID) {
+    if (formID == 0 || !_dhnd) {
+        return 0;
     }
-
-    uint32_t newFormID = formID & 0x00FFFFFF | newMask;
-
-    //	logs::info("\t\toriginal formID=%08X, oldMask = %02X, newMask = %02X, new formID=%08X", formID, mask, newMask >>
-    //24, newFormID);
-
-    return newFormID;
+    return _dhnd->LookupFormIDRaw(formID, _modName);
 }
 
 void TESFileReader::_pushItem(uint32_t objID, uint32_t baseID) {
@@ -474,59 +479,53 @@ std::vector<std::string> split(const std::string& str, char delim) {
     return res;
 }
 
-bool FollowerCollection::_isDlc(std::string modName) { return (modName == "Skyrim.esm" || _dlcMap[modName] != 0); }
+bool FollowerCollection::_isDlc(std::string modName) {
+    return modName == "Skyrim.esm" || _dlcMap.contains(modName);
+}
 
 void FollowerCollection::_setupDLCsMap() {
     RE::TESDataHandler* dhnd = RE::TESDataHandler::GetSingleton();
-    if (dhnd->LookupModByName("Skyrim.esm") != NULL) {
-        //		_dlcMap["Skyrim.esm"] = _dhnd->modList.modInfoList.GetIndexOf(LoadedModFinder("Skyrim.esm"));
-        //		_dlcMap["Skyrim.esm"] = dhnd->GetLoadedModIndex("Skyrim.esm");
-        //_dlcMap["Skyrim.esm"] = dhnd->LookupModByName("Skyrim.esm")->modIndex;
-        _dlcMap["Skyrim.esm"] = dhnd->GetLoadedModIndex("Skyrim.esm").value();
-    }
-    if (dhnd->LookupModByName("Dawnguard.esm") != NULL) {
-        //		_dlcMap["Skyrim.esm"] = _dhnd->modList.modInfoList.GetIndexOf(LoadedModFinder("Dawnguard.esm"));
-        //_dlcMap["Dawnguard.esm"] = dhnd->LookupModByName("Dawnguard.esm")->modIndex;
-        _dlcMap["Dawnguard.esm"] = dhnd->GetLoadedModIndex("Dawnguard.esm").value();
-    }
-    if (dhnd->LookupModByName("HearthFires.esm") != NULL) {
-        //		_dlcMap["Skyrim.esm"] = _dhnd->modList.modInfoList.GetIndexOf(LoadedModFinder("HearthFires.esm"));
-        //_dlcMap["HearthFires.esm"] = dhnd->LookupModByName("HearthFires.esm")->modIndex;
-        _dlcMap["HearthFires.esm"] = dhnd->GetLoadedModIndex("HearthFires.esm").value();
-    }
-    if (dhnd->LookupModByName("Dragonborn.esm") != NULL) {
-        //		_dlcMap["Skyrim.esm"] = _dhnd->modList.modInfoList.GetIndexOf(LoadedModFinder("Dragonborn.esm"));
-        //_dlcMap["Dragonborn.esm"] = dhnd->LookupModByName("Dragonborn.esm")->modIndex;
-        _dlcMap["Dragonborn.esm"] = dhnd->GetLoadedModIndex("Dragonborn.esm").value();
+    _dlcMap.clear();
+    for (const char* name : { "Skyrim.esm", "Dawnguard.esm", "HearthFires.esm", "Dragonborn.esm" }) {
+        if (dhnd && dhnd->LookupModByName(name)) {
+            _dlcMap[name] = 1;
+        }
     }
 }
 
 iniConf FollowerCollection::_str2Conf(std::string str) {
     std::vector<std::string> items = split(str, '\t');
     iniConf item;
-    item.key = items[0];
-    item.value = items[1];
+    item.key = items.size() > 0 ? items[0] : "";
+    item.value = items.size() > 1 ? items[1] : "";
     return item;
 }
 
 iniLine FollowerCollection::_str2item(std::string str) {
     std::vector<std::string> items = split(str, '\t');
     iniLine item;
-    item.modName = items[0];
     item.formID = 0;
     item.objectID = 0;
+    item.isFemale = false;
+    if (items.size() < 5) {
+        return item;
+    }
+    item.modName = items[0];
     item.isFemale = (items[3] == "Female");
     item.name = items[4];
 
-    if (item.modName != "Skyrim.esm" && _dlcMap[items[0]] == 0) {
+    if (!_isDlc(item.modName)) {
         return item;
     }
 
-    uint32_t upper2digit = _dlcMap[items[0]] << 24;
-    item.objectID = std::strtoul(items[1].c_str(), NULL, 16);
-    item.objectID = item.objectID | upper2digit;
-    item.formID = std::strtoul(items[2].c_str(), NULL, 16);
-    item.formID = item.formID | upper2digit;
+    auto dhnd = RE::TESDataHandler::GetSingleton();
+    auto file = dhnd ? dhnd->LookupModByName(item.modName) : nullptr;
+    if (!file) {
+        return item;
+    }
+    const uint32_t mask = file->IsLight() ? 0xFFF : 0xFFFFFF;
+    item.objectID = dhnd->LookupFormID(std::strtoul(items[1].c_str(), NULL, 16) & mask, item.modName);
+    item.formID = dhnd->LookupFormID(std::strtoul(items[2].c_str(), NULL, 16) & mask, item.modName);
 
     return item;
 }
@@ -592,7 +591,11 @@ void FollowerCollection::_readIniFile() {
 
 void FollowerCollection::_setconf(iniConf conf) {
     if (conf.key == "FILE_UPPER_LIMIT_SIZE") {
-        _upperlimit = std::stoi(conf.value);
+        try {
+            _upperlimit = static_cast<uint32_t>(std::stoul(conf.value));
+        } catch (const std::exception&) {
+            logs::info("invalid FILE_UPPER_LIMIT_SIZE: {}", conf.value);
+        }
     } else if (conf.key == "GET_FOLLOWER_FROM_OTHER_MOD") {
         if (conf.value == "OFF") {
             _enableFollowerFunction = false;
@@ -602,112 +605,111 @@ void FollowerCollection::_setconf(iniConf conf) {
 
 void FollowerCollection::collectAll() {
     RE::TESDataHandler* dhnd = RE::TESDataHandler::GetSingleton();
+    if (!dhnd) {
+        logs::info("FollowerCollection::collectAll:\tTESDataHandler is not ready");
+        return;
+    }
+    _objectListMale.clear();
+    _objectListFemale.clear();
 
     _readIniFile();
     if (!_enableFollowerFunction) {
         logs::info("FollowerCollection::collectionAll:\tGET_FOLLOWER_FROM_OTHER_MOD OFF");
         return;
     }
-    uint32_t modCount;
-    //	modCount = dhnd->modList.loadedModCount;
-    //modCount = dhnd->modList.loadedMods.count;
-    modCount = dhnd->GetLoadedModCount();
-    for (int i = 0; i < modCount; i++) {
-        class TESFileReader trf = TESFileReader(i);
-        trf.setUpperLimit(_upperlimit);
-        //		_DMESSAGE("debug: start modName=%s", trf.getModName().c_str());
-        //		if(trf.isEsp()){
-        if (!_isDlc(trf.getModName())) {
-            trf.scanTESFileByModIndex();
-            if (trf.hasError()) {
-                //				logs::info("debug: An error occurred in reading this MOD. Skip reading this MOD.\n\t%s:\t%s",
-                //trf.getModName().c_str(), trf.getErrorType().c_str());
-            } else {
-                //				logs::info("Reading of this MOD ended normally..\n\t%s", trf.getModName().c_str());
-            }
-            std::vector<pair> pairs = trf.getRefs();
-            std::vector<pair>::iterator it;
-            for (it = pairs.begin(); it != pairs.end(); it++) {
-                //				logs::info("\tdebug: baseID=%08X, objID=%08X", it->baseID, it->objID);
-                //TESNPC* npc = (TESNPC*)LookupFormByID(it->baseID);
-                //RE::TESObjectREFR* objRef = (RE::TESObjectREFR*)LookupFormByID(it->objID);
-                RE::TESNPC* npc = RE::TESForm::LookupByID<RE::TESNPC>(it->baseID);
-                RE::TESObjectREFR* objRef = RE::TESForm::LookupByID<RE::TESObjectREFR>(it->objID);
-                //				logs::info("\tdebug: lookup done");
-                //if (npc && npc->kTypeID == 43) {
-                if (npc && npc->GetFormType() == RE::FormType::NPC) {
-                        //					logs::info("\tdebug: npc->kTypeID=%d", npc->kTypeID);
-                    // std::string npcName = npc->fullName.GetName();
-                    std::string npcName = npc->GetFullName();
-                    //int numFactions = npc->RE::ActorData.factions.count;
-                    int numFactions = npc->factions.size();
-                    if (numFactions > 0) {
-                        for (int j = 0; j < numFactions; j++) {
-                            RE::TESFaction* pFaction;
-                            // pFaction = npc->RE::ActorData.factions.arr.entries[j].faction;
-                            pFaction = npc->factions[j].faction;
 
-                            if (pFaction && pFaction->formID == 378957) {
-                                if (objRef) {
-                                    logs::info(
-                                        "FollowerCollection::collectionAll:\t{:08X}\t{:08X}\tfollower\t{:40s}\t{}\texist",
-                                        it->objID, it->baseID, it->modName.c_str(), npcName.c_str());
-                                    // if (CALL_MEMBER_FN(npc, GetSex)()) {
-                                    if (npc->GetSex() == RE::SEXES::kFemale) {
-                                        _objectListFemale.push_back(objRef);
-                                        //logs::info("%s is female", npcName.c_str());
-                                    } else {
-                                        _objectListMale.push_back(objRef);
-                                        //logs::info("%s is male", npcName.c_str());
-                                    }
-                                } else {
-                                    logs::info(
-                                        "FollowerCollection::collectionAll:\t{:08X}\t{:08X}\tfollower\t{:40s}\t{}\tNOT EXIST",
-                                        it->objID, it->baseID, it->modName.c_str(), npcName.c_str());
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        } else {
-            logs::info("FollowerCollection::collectionAll():\t{} is Default DLC file",
-                      //dhnd->modList.loadedMods[i]->name);
-                      dhnd->LookupLoadedModByIndex(i)->fileName);
-        }
-        //		_DMESSAGE("debug: finish modName=%s", trf.getModName().c_str());
+    const uint32_t modCount = dhnd->GetLoadedModCount();
+    for (uint32_t i = 0; i < modCount; i++) {
+        _scanMod(dhnd->LookupLoadedModByIndex(static_cast<uint8_t>(i)));
+    }
+    const uint32_t lightModCount = dhnd->GetLoadedLightModCount();
+    for (uint32_t i = 0; i < lightModCount; i++) {
+        _scanMod(dhnd->LookupLoadedLightModByIndex(static_cast<uint16_t>(i)));
     }
 }
 
-uint32_t FollowerCollection::getFollowersCountMale() { return _objectListMale.size(); }
+void FollowerCollection::_scanMod(const RE::TESFile* a_file) {
+    if (!a_file) {
+        return;
+    }
+    TESFileReader trf(a_file);
+    if (_isDlc(trf.getModName())) {
+        logs::info("FollowerCollection::collectionAll():\t{} is Default DLC file", trf.getModName());
+        return;
+    }
+    trf.setUpperLimit(_upperlimit);
+    trf.scanTESFileByModIndex();
+
+    for (const auto& item : trf.getRefs()) {
+        RE::TESNPC* npc = RE::TESForm::LookupByID<RE::TESNPC>(item.baseID);
+        if (!npc) {
+            continue;
+        }
+        RE::TESObjectREFR* objRef = RE::TESForm::LookupByID<RE::TESObjectREFR>(item.objID);
+        const char* fullName = npc->GetFullName();
+        std::string npcName = fullName ? fullName : "";
+        for (const auto& factionRank : npc->factions) {
+            // 0x0005C84D: PotentialFollowerFaction (Skyrim.esm)
+            if (!factionRank.faction || factionRank.faction->formID != 0x0005C84D) {
+                continue;
+            }
+            if (objRef) {
+                logs::info("FollowerCollection::collectionAll:\t{:08X}\t{:08X}\tfollower\t{:40s}\t{}\texist",
+                           item.objID, item.baseID, item.modName, npcName);
+                if (npc->GetSex() == RE::SEXES::kFemale) {
+                    _objectListFemale.push_back(objRef);
+                } else {
+                    _objectListMale.push_back(objRef);
+                }
+            } else {
+                logs::info("FollowerCollection::collectionAll:\t{:08X}\t{:08X}\tfollower\t{:40s}\t{}\tNOT EXIST",
+                           item.objID, item.baseID, item.modName, npcName);
+            }
+            break;
+        }
+    }
+}
+
+uint32_t FollowerCollection::getFollowersCountMale() { return static_cast<uint32_t>(_objectListMale.size()); }
 
 RE::TESObjectREFR* FollowerCollection::getFollowerObjectMale(uint32_t num) {
+    if (num >= _objectListMale.size()) {
+        logs::info("FollowerCollection::getFollowerObjectMale\tnum={} is out of range ({})", num, _objectListMale.size());
+        return nullptr;
+    }
     logs::info("FollowerCollection::getFollowerObjectMale\tnum={}\tRE::Actor={:08X}", num, _objectListMale[num]->formID);
     return _objectListMale[num];
 }
 
 RE::TESObjectREFR* FollowerCollection::getRandomFollowerObjectMale() {
-    uint32_t rand;
+    if (_objectListMale.empty()) {
+        return nullptr;
+    }
     std::random_device rnd;
-    rand = rnd() % getFollowersCountMale();
+    uint32_t rand = rnd() % getFollowersCountMale();
     RE::TESObjectREFR* actor = _objectListMale[rand];
     logs::info("FollowerCollection::getRandomFollowerObjectMale\trand={}\tRE::Actor={:08X}", rand, actor->formID);
-    return _objectListMale[rand];
+    return actor;
 }
 
-uint32_t FollowerCollection::getFollowersCountFemale() { return _objectListFemale.size(); }
+uint32_t FollowerCollection::getFollowersCountFemale() { return static_cast<uint32_t>(_objectListFemale.size()); }
 
 RE::TESObjectREFR* FollowerCollection::getFollowerObjectFemale(uint32_t num) {
-    logs::info("FollowerCollection::getRandomFollowerObjectFemale\tnum={}\tRE::Actor={:08X}", num,
-             _objectListFemale[num]->formID);
+    if (num >= _objectListFemale.size()) {
+        logs::info("FollowerCollection::getFollowerObjectFemale\tnum={} is out of range ({})", num, _objectListFemale.size());
+        return nullptr;
+    }
+    logs::info("FollowerCollection::getFollowerObjectFemale\tnum={}\tRE::Actor={:08X}", num, _objectListFemale[num]->formID);
     return _objectListFemale[num];
 }
 
 RE::TESObjectREFR* FollowerCollection::getRandomFollowerObjectFemale() {
-    uint32_t rand;
+    if (_objectListFemale.empty()) {
+        return nullptr;
+    }
     std::random_device rnd;
-    rand = rnd() % getFollowersCountFemale();
+    uint32_t rand = rnd() % getFollowersCountFemale();
     RE::TESObjectREFR* actor = _objectListFemale[rand];
     logs::info("FollowerCollection::getRandomFollowerObjectFemale\trand={}\tRE::Actor={:08X}", rand, actor->formID);
-    return _objectListFemale[rand];
+    return actor;
 }
